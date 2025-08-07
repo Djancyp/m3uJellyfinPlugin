@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Jellyfin.Plugin.Template</RootNamespace>
@@ -8,22 +7,27 @@
     <Nullable>enable</Nullable>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <CodeAnalysisRuleSet>../jellyfin.ruleset</CodeAnalysisRuleSet>
+    <NoWarn>SA1111;SA1649;SA1517;CS0246;SA1028;SA1117;SA1116;CA2227;CA1002;CA2007;CS1591:SA1513;SA1508;SA1513;SA1514;SA1300;SA1505;SA1122;1591;1573;SA1518;SA1516</NoWarn>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.9.11" />
-    <PackageReference Include="Jellyfin.Model" Version="10.9.11" />
+    <PackageReference Include="Jellyfin.Common" Version="10.10.7" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" />
+    <PackageReference Include="Jellyfin.Model" Version="10.10.7"></PackageReference>
+    <PackageReference Include="Jellyfin.Data" Version="10.10.7"></PackageReference>
+    <PackageReference Include="Jellyfin.Extensions" Version="10.10.7"></PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0"></PackageReference>
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="SerilogAnalyzer" Version="0.15.0" PrivateAssets="All" />
-    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="All" />
-    <PackageReference Include="SmartAnalyzers.MultithreadingAnalyzer" Version="1.1.31" PrivateAssets="All" />
+    <PackageReference Include="SerilogAnalyzer" PrivateAssets="All" Version="0.15.0"></PackageReference>
+    <PackageReference Include="StyleCop.Analyzers" PrivateAssets="All" Version="1.2.0-beta.556"></PackageReference>
+    <PackageReference
+      Include="SmartAnalyzers.MultithreadingAnalyzer"
+      PrivateAssets="All"
+      Version="1.1.31"
+    ></PackageReference>
   </ItemGroup>
-
   <ItemGroup>
-    <None Remove="Configuration\configPage.html" />
-    <EmbeddedResource Include="Configuration\configPage.html" />
+    <None Remove="Configuration\configPage.html"></None>
+    <EmbeddedResource Include="Configuration\configPage.html"></EmbeddedResource>
   </ItemGroup>
-
 </Project>

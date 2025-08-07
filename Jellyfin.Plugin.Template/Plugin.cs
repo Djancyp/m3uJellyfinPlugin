@@ -6,46 +6,39 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
+using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.Template;
-
-/// <summary>
-/// The main plugin.
-/// </summary>
-public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+namespace Jellyfin.Plugin.Template
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="Plugin"/> class.
-    /// </summary>
-    /// <param name="applicationPaths">Instance of the <see cref="IApplicationPaths"/> interface.</param>
-    /// <param name="xmlSerializer">Instance of the <see cref="IXmlSerializer"/> interface.</param>
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
-        : base(applicationPaths, xmlSerializer)
+    public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
-        Instance = this;
-    }
+        private readonly ILogger<Plugin> _logger;
 
-    /// <inheritdoc />
-    public override string Name => "Template";
+        public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<Plugin> logger)
+            : base(applicationPaths, xmlSerializer)
+        {
+            _logger = logger;
+            Instance = this;
+        }
 
-    /// <inheritdoc />
-    public override Guid Id => Guid.Parse("eb5d7894-8eef-4b36-aa6f-5d124e828ce1");
+        public override string Name => "Proxy Template Plugin";
+        public override Guid Id => Guid.Parse("fcd2ee35-8fd5-4640-b710-a835de03012d");
+        public static Plugin? Instance { get; private set; }
 
-    /// <summary>
-    /// Gets the current plugin instance.
-    /// </summary>
-    public static Plugin? Instance { get; private set; }
-
-    /// <inheritdoc />
-    public IEnumerable<PluginPageInfo> GetPages()
-    {
-        return
-        [
-            new PluginPageInfo
-            {
-                Name = Name,
-                EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)
-            }
-        ];
+        public IEnumerable<PluginPageInfo> GetPages()
+        {
+            return
+            [
+                new PluginPageInfo
+                {
+                    Name = Name,
+                    EmbeddedResourcePath = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0}.Configuration.configPage.html",
+                        GetType().Namespace
+                    ),
+                },
+            ];
+        }
     }
 }
