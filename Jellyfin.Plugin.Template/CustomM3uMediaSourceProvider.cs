@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Entities;
+using Jellyfin.Plugin.Template.Configuration;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -20,6 +22,7 @@ namespace Jellyfin.Plugin.Template;
 
 public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
 {
+    private readonly PluginConfiguration _configuration;
     private readonly ILogger<CustomM3uMediaSourceProvider> _logger;
     private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
@@ -31,13 +34,15 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
         ILogger<CustomM3uMediaSourceProvider> logger,
         IUserManager userManager,
         ISessionManager sessionManager,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor
+    )
     {
         _logger = logger;
         _userManager = userManager;
         _sessionManager = sessionManager;
         _httpContextAccessor = httpContextAccessor;
         _httpClient = new HttpClient();
+        _configuration = Plugin.Instance!.Configuration;
         _disposed = false;
     }
 
@@ -50,6 +55,8 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
         var originalUrl = item.Path ?? string.Empty;
         var modifiedUrl = await ModifyStreamUrl(originalUrl, item, cancellationToken);
 
+        // get the full item from item.id
+
         if (string.IsNullOrEmpty(modifiedUrl))
         {
             _logger.LogWarning("Modified URL is empty for item {ItemName}; returning empty media sources", item.Name);
@@ -58,7 +65,7 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
 
         var mediaSource = new MediaSourceInfo
         {
-            Id = item.ChannelId.ToString(),
+            Id = item.Id.ToString(),
             Path = modifiedUrl,
             Protocol = MediaProtocol.Http,
             Name = item.Name,
@@ -69,7 +76,11 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
             UseMostCompatibleTranscodingProfile = true,
         };
 
-        _logger.LogInformation("Providing modified stream URL {ModifiedUrl} for item {ItemName}", modifiedUrl, item.Name);
+        _logger.LogInformation(
+            "Providing modified stream URL {ModifiedUrl} for item {ItemName}",
+            modifiedUrl,
+            item.Name
+        );
         return new[] { mediaSource };
     }
 
@@ -112,7 +123,7 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
             {
                 OriginalUrl = originalUrl,
                 UserId = userId,
-                ChannelId = item.ChannelId,
+                ChannelId = item.Id,
                 ChannelName = item.Name,
             };
             var jsonContent = new StringContent(
@@ -122,7 +133,7 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
             );
 
             // External service URL
-            var externalServiceUrl = "http://192.168.0.13:8585/hook";
+            var externalServiceUrl = _configuration.M3UUrl;
             _logger.LogInformation(
                 "Sending POST request to {ServiceUrl} with userId {UserId}",
                 externalServiceUrl,
