@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -12,6 +13,7 @@ using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.MediaInfo;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Template;
@@ -21,65 +23,54 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
     private readonly ILogger<CustomM3uMediaSourceProvider> _logger;
     private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly HttpClient _httpClient;
     private bool _disposed;
 
     public CustomM3uMediaSourceProvider(
         ILogger<CustomM3uMediaSourceProvider> logger,
         IUserManager userManager,
-        ISessionManager sessionManager
-    )
+        ISessionManager sessionManager,
+        IHttpContextAccessor httpContextAccessor)
     {
         _logger = logger;
         _userManager = userManager;
         _sessionManager = sessionManager;
+        _httpContextAccessor = httpContextAccessor;
         _httpClient = new HttpClient();
         _disposed = false;
     }
 
-    public Task<IEnumerable<MediaSourceInfo>> GetMediaSources(BaseItem item, CancellationToken cancellationToken)
+    public async Task<IEnumerable<MediaSourceInfo>> GetMediaSources(BaseItem item, CancellationToken cancellationToken)
     {
         _logger.LogInformation("CustomM3uMediaSourceProvider: Processing media sources for item {ItemName}", item.Name);
         _logger.LogInformation("Item Type: {ItemType}, Item ID: {ItemId}", item.GetType().Name, item.Id);
         _logger.LogInformation("Item Path: {ItemPath}", item.Path ?? "null");
 
-        // _logger.LogInformation("MediaSourceTest: {MediaSourceTest}", mediaSourcetest?.Path ?? "null");
+        var originalUrl = item.Path ?? string.Empty;
+        var modifiedUrl = await ModifyStreamUrl(originalUrl, item, cancellationToken);
 
-        // Check if there is a valid media source or item path
-        if (string.IsNullOrEmpty(item.Path))
+        if (string.IsNullOrEmpty(modifiedUrl))
         {
-            var originalUrl = item.Path ?? string.Empty;
-            // if (string.IsNullOrEmpty(originalUrl))
-            // {
-            //     _logger.LogWarning("No valid URL found for item {ItemName}; returning empty media sources", item.Name);
-            //     return Task.FromResult<IEnumerable<MediaSourceInfo>>(Array.Empty<MediaSourceInfo>());
-            // }
-
-            var modifiedUrl = ModifyStreamUrl(originalUrl, item, cancellationToken).GetAwaiter().GetResult();
-
-            var mediaSource = new MediaSourceInfo
-            {
-                Id = item.ExternalId.ToString(),
-                Path = modifiedUrl,
-                Protocol = MediaProtocol.Http,
-                Name = item.Name,
-                RequiresOpening = false,
-                SupportsDirectStream = true,
-                SupportsDirectPlay = true,
-                SupportsTranscoding = true,
-                UseMostCompatibleTranscodingProfile = true,
-            };
-
-            _logger.LogInformation("Modified stream URL from {OriginalUrl} to {ModifiedUrl}", originalUrl, modifiedUrl);
-            return Task.FromResult<IEnumerable<MediaSourceInfo>>(new[] { mediaSource });
+            _logger.LogWarning("Modified URL is empty for item {ItemName}; returning empty media sources", item.Name);
+            return Array.Empty<MediaSourceInfo>();
         }
 
-        // Return empty list for items without a valid URL
-        _logger.LogWarning(
-            "No valid media source or path for item {ItemName}; returning empty media sources",
-            item.Name
-        );
-        return Task.FromResult<IEnumerable<MediaSourceInfo>>(Array.Empty<MediaSourceInfo>());
+        var mediaSource = new MediaSourceInfo
+        {
+            Id = item.ChannelId.ToString(),
+            Path = modifiedUrl,
+            Protocol = MediaProtocol.Http,
+            Name = item.Name,
+            RequiresOpening = false,
+            SupportsDirectStream = true,
+            SupportsDirectPlay = true,
+            SupportsTranscoding = true,
+            UseMostCompatibleTranscodingProfile = true,
+        };
+
+        _logger.LogInformation("Providing modified stream URL {ModifiedUrl} for item {ItemName}", modifiedUrl, item.Name);
+        return new[] { mediaSource };
     }
 
     public Task<ILiveStream> OpenMediaSource(
@@ -96,26 +87,34 @@ public class CustomM3uMediaSourceProvider : IMediaSourceProvider, IDisposable
         // Fallback to original URL if anything fails
         try
         {
-            // Get user ID (try to resolve from session or fallback to "unknown")
-            string userId = "unknown";
-            try
+            User? user = null;
+            var username = _httpContextAccessor.HttpContext?.User?.Identity?.Name;
+            if (!string.IsNullOrEmpty(username))
             {
-                // Attempt to get user ID from session context
+                user = _userManager.GetUserByName(username);
+            }
+
+            if (user == null)
+            {
+                // Fallback to session manager if user is not in http context
                 var sessions = _sessionManager.Sessions.Where(s => s.NowPlayingItem?.Id == item.Id).ToList();
                 if (sessions.Count > 0)
                 {
-                    var user = _userManager.GetUserById(sessions.First().UserId);
-                    userId = user?.Id.ToString() ?? "unknown";
+                    user = _userManager.GetUserById(sessions.First().UserId);
                 }
-                _logger.LogInformation("Resolved user ID '{UserId}' for item {ItemName}", userId, item.Name);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Failed to retrieve user ID for item {ItemName}: {Error}", item.Name, ex.Message);
             }
 
+            var userId = user?.Id.ToString() ?? "unknown";
+            _logger.LogInformation("Resolved user ID '{UserId}' for item {ItemName}", userId, item.Name);
+
             // Prepare POST request body with user ID and original URL
-            var requestBody = new { OriginalUrl = originalUrl, UserId = userId };
+            var requestBody = new
+            {
+                OriginalUrl = originalUrl,
+                UserId = userId,
+                ChannelId = item.ChannelId,
+                ChannelName = item.Name,
+            };
             var jsonContent = new StringContent(
                 System.Text.Json.JsonSerializer.Serialize(requestBody),
                 Encoding.UTF8,
